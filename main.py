@@ -6,6 +6,7 @@ def run_cli():
     system = LostAndFoundSystem()
 
     while True:
+        # --- LOGIN INTERFACE ---
         if not system.current_user:
             name = input("Enter your username to login: ")
             if system.login(name):
@@ -14,6 +15,7 @@ def run_cli():
                 print("Name cannot be empty.")
                 continue
 
+        # --- MENU DISPLAY ---
         print("\n--- FOUNDIT MENU ---")
         print("1. View Items")
         print("2. Report Item")
@@ -23,6 +25,7 @@ def run_cli():
         
         choice = input("Enter choice: ")
 
+        # --- VIEW ITEMS (READ) ---
         if choice == "1":
             print("\n--- ALL ITEMS ---")
             if not system.items:
@@ -32,6 +35,7 @@ def run_cli():
                     print(f"{i + 1}. {item.name} ({item.status}) - {item.location}")
                     print(f"   Category: {item.category} | Desc: {item.desc} | Posted by: {item.owner}")
 
+        # --- REPORT ITEM (CREATE) ---
         elif choice == "2":
             print("\n--- REPORT ITEM ---")
             name = input("Item name: ")
@@ -42,6 +46,7 @@ def run_cli():
             system.add_item(name, category, location, desc)
             print("Item added successfully!")
 
+        # --- SEARCH ITEMS (FILTER) ---
         elif choice == "3":
             print("\n--- SEARCH ---")
             if not system.items:
@@ -55,6 +60,7 @@ def run_cli():
                 else:
                     print("No matching items found.")
 
+        # --- CLAIM ITEM & VERIFY (UPDATE STATUS) ---
         elif choice == "4":
             print("\n--- CLAIM ITEM ---")
             if not system.items:
@@ -74,6 +80,7 @@ def run_cli():
                 except ValueError:
                     print("Please enter a valid number.")
 
+        # --- LOGOUT ---
         elif choice == "5":
             print("Logging out...")
             system.logout()
