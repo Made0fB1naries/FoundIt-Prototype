@@ -1,62 +1,64 @@
 # models.py
 
-# --- USER CLASS ---
-# Manages user account data
+class Institution:
+    def __init__(self, institution_name, campus_location):
+        self.institution_name = institution_name
+        self.campus_location = campus_location
+
+    def get_details(self):
+        return f"{self.institution_name} - {self.campus_location}"
+
+
 class User:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, username, institutional_id):
+        self.username = username
+        self.institutional_id = institutional_id
 
-# --- ITEM CLASS ---
-# Manages individual lost/found item details and status
-class Item:
-    def __init__(self, name, category, location, desc, owner):
-        self.name = name
-        self.category = category
-        self.location = location
-        self.desc = desc
-        self.owner = owner
-        self.status = "Lost"
+    def login(self):
+        return bool(self.username.strip())
 
-# --- SYSTEM CLASS ---
-# Core logic controlling the database list, login, and actions
-class LostAndFoundSystem:
-    def __init__(self):
-        self.items = []
-        self.current_user = None
-
-    # --- LOGIN ACTION ---
-    def login(self, name):
-        if name.strip():
-            self.current_user = User(name.strip())
-            return True
-        return False
-
-    # --- LOGOUT ACTION ---
     def logout(self):
-        self.current_user = None
+        return None
 
-    # --- CREATE/REPORT ACTION ---
-    def add_item(self, name, category, location, desc):
-        if self.current_user:
-            new_item = Item(name, category, location, desc, self.current_user.name)
-            self.items.append(new_item)
-            return True
-        return False
 
-    # --- SEARCH/FILTER ACTION ---
-    def search_items(self, keyword):
-        keyword = keyword.lower()
-        results = []
-        for item in self.items:
-            if keyword in item.name.lower() or keyword in item.location.lower():
-                results.append(item)
-        return results
+class Category:
+    def __init__(self, category_name, category_code):
+        self.category_name = category_name
+        self.category_code = category_code
 
-    # --- CLAIM/VERIFY ACTION ---
-    def claim_item(self, index, verification_answer):
-        if 0 <= index < len(self.items):
-            item = self.items[index]
-            if verification_answer:
-                item.status = "Claimed"
-                return True
-        return False
+    def filter_by_category(self, items):
+        return [item for item in items if item.category.category_name == self.category_name]
+
+
+class Tracking:
+    def __init__(self, tracking_id, current_status="Lost"):
+        self.tracking_id = tracking_id
+        self.current_status = current_status  # "Lost", "Pending", "Claimed"
+
+    def update_tracking_status(self, new_status):
+        self.current_status = new_status
+
+
+class Item:
+    def __init__(self, item_name, description, category):
+        self.item_name = item_name
+        self.description = description
+        self.category = category  # Category object
+        self.tracking = Tracking(tracking_id=f"TRK-{id(self)}")
+
+    def get_item_info(self):
+        return f"{self.item_name} [{self.tracking.current_status}]"
+
+
+class Post:
+    def __init__(self, post_id, date_posted, user, item):
+        self.post_id = post_id
+        self.date_posted = date_posted
+        self.user = user        # User object
+        self.item = item        # Item object
+
+    def create_post(self):
+        return True
+
+    def remove_post(self):
+        return True
