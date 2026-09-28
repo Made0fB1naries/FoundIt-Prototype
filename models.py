@@ -1,5 +1,47 @@
 # models.py
+import json
+import os
 
+DB_FILE = "database.json"
+
+def save_database(posts_list):
+    data = []
+    for p in posts_list:
+        data.append({
+            "post_id": p.post_id,
+            "date_posted": p.date_posted,
+            "username": p.user.username,
+            "institutional_id": p.user.institutional_id,
+            "item_name": p.item.item_name,
+            "description": p.item.description,
+            "category_name": p.item.category.category_name,
+            "category_code": p.item.category.category_code,
+            "status": p.item.tracking.current_status
+        })
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def load_database(categories_list):
+    if not os.path.exists(DB_FILE):
+        return []
+    
+    try:
+        with open(DB_FILE, "r") as f:
+            data = json.load(f)
+        
+        loaded_posts = []
+        for d in data:
+            # Re-instantiate your OOP classes from raw data
+            user = User(d["username"], d["institutional_id"])
+            cat = next((c for c in categories_list if c.category_name == d["category_name"]), categories_list[3])
+            item = Item(d["item_name"], d["description"], cat)
+            item.tracking.current_status = d["status"]
+            post = Post(d["post_id"], d["date_posted"], user, item)
+            loaded_posts.append(post)
+        return loaded_posts
+    except Exception:
+        return []
+        
 class Institution:
     def __init__(self, institution_name, campus_location):
         self.institution_name = institution_name
