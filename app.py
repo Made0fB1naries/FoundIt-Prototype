@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 import datetime
-from models import Institution, User, Category, Tracking, Item, Post
+from models import Institution, User, Category, Tracking, Item, Post, load_database, save_database
 
 # Page Config
 st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="🔍", layout="centered")
@@ -9,7 +9,7 @@ st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="🔍",
 # Initialize School Context
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
 
-# Initialize Categories in Session State if not present
+# Initialize Categories
 if "categories" not in st.session_state:
     st.session_state.categories = [
         Category("Electronics", "CAT-01"),
@@ -18,9 +18,9 @@ if "categories" not in st.session_state:
         Category("Others", "CAT-04")
     ]
 
-# Initialize Posts and User Session State
+
 if "posts" not in st.session_state:
-    st.session_state.posts = []
+    st.session_state.posts = load_database(st.session_state.categories)
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
@@ -46,7 +46,7 @@ if not st.session_state.current_user:
             else:
                 st.error("Please enter a valid username.")
 else:
-    # Sidebar for User Info & Logout
+
     st.sidebar.write(f"👤 **{st.session_state.current_user.username}**")
     st.sidebar.caption(f"ID: {st.session_state.current_user.institutional_id}")
     if st.sidebar.button("Logout"):
@@ -85,16 +85,17 @@ else:
             
             if submit_post:
                 if item_name.strip():
-                    # Find selected Category object
                     selected_cat = next(cat for cat in st.session_state.categories if cat.category_name == selected_cat_name)
                     
-                    # Instantiate objects from your classes
                     new_item = Item(item_name, description, selected_cat)
                     today_date = datetime.date.today().strftime("%Y-%m-%d")
                     new_post = Post(f"POST-{len(st.session_state.posts)+1}", today_date, st.session_state.current_user, new_item)
                     
+
                     st.session_state.posts.append(new_post)
-                    st.success("Item posted successfully to the feed!")
+                    save_database(st.session_state.posts)
+                    
+                    st.success("Item posted successfully and saved to the global feed!")
                 else:
                     st.warning("Please provide an item name.")
 
@@ -130,5 +131,7 @@ else:
             
             if st.button("Apply Status Update"):
                 target_post.item.tracking.update_tracking_status(new_status)
-                st.success(f"Status updated to **{new_status}**!")
+
+                save_database(st.session_state.posts)
+                st.success(f"Status updated to **{new_status}** and saved!")
                 st.rerun()
