@@ -18,7 +18,6 @@ if "categories" not in st.session_state:
         Category("Others", "CAT-04")
     ]
 
-
 if "posts" not in st.session_state:
     st.session_state.posts = load_database(st.session_state.categories)
 
@@ -46,7 +45,6 @@ if not st.session_state.current_user:
             else:
                 st.error("Please enter a valid username.")
 else:
-
     st.sidebar.write(f"👤 **{st.session_state.current_user.username}**")
     st.sidebar.caption(f"ID: {st.session_state.current_user.institutional_id}")
     if st.sidebar.button("Logout"):
@@ -56,20 +54,42 @@ else:
     st.sidebar.markdown("---")
     navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Category", "Update Tracking Status"])
 
-    # --- 2. VIEW FEED UI ---
+    # --- 2. VIEW FEED UI WITH SEARCH & NEWEST-FIRST ---
     if navigation == "View Feed":
         st.header("📋 Recent Dashboard Feed")
+        
+        # Search input for Title, Type/Category, and Description
+        search_query = st.text_input("🔍 Search feed (by title, category, or description):", "").strip().lower()
+        
         if not st.session_state.posts:
             st.info("No items posted yet. Be the first to report one!")
         else:
-            for idx, post in enumerate(st.session_state.posts):
-                with st.container():
-                    st.subheader(f"{idx + 1}. {post.item.item_name}")
-                    st.write(f"**Status:** `{post.item.tracking.current_status}`")
-                    st.write(f"**Category:** {post.item.category.category_name}")
-                    st.write(f"**Description:** {post.item.description}")
-                    st.caption(f"Posted by {post.user.username} on {post.date_posted}")
-                    st.markdown("---")
+            # Reverse list [::-1] so newest items show up on top without numbers
+            posts_to_display = st.session_state.posts[::-1]
+            
+            # Apply search filter if query is entered
+            if search_query:
+                filtered_posts = []
+                for post in posts_to_display:
+                    title_match = search_query in post.item.item_name.lower()
+                    category_match = search_query in post.item.category.category_name.lower()
+                    desc_match = search_query in post.item.description.lower()
+                    
+                    if title_match or category_match or desc_match:
+                        filtered_posts.append(post)
+                posts_to_display = filtered_posts
+
+            if not posts_to_display:
+                st.warning(f"No items match your search for '{search_query}'.")
+            else:
+                for post in posts_to_display:
+                    with st.container():
+                        st.subheader(f"📌 {post.item.item_name}")
+                        st.write(f"**Status:** `{post.item.tracking.current_status}`")
+                        st.write(f"**Category:** {post.item.category.category_name}")
+                        st.write(f"**Description:** {post.item.description}")
+                        st.caption(f"Posted by {post.user.username} on {post.date_posted}")
+                        st.markdown("---")
 
     # --- 3. REPORT ITEM UI ---
     elif navigation == "Report Item":
@@ -91,7 +111,6 @@ else:
                     today_date = datetime.date.today().strftime("%Y-%m-%d")
                     new_post = Post(f"POST-{len(st.session_state.posts)+1}", today_date, st.session_state.current_user, new_item)
                     
-
                     st.session_state.posts.append(new_post)
                     save_database(st.session_state.posts)
                     
@@ -121,7 +140,7 @@ else:
         if not st.session_state.posts:
             st.info("No items available to update.")
         else:
-            post_options = {f"{i+1}. {p.item.item_name} ({p.item.tracking.current_status})": i for i, p in enumerate(st.session_state.posts)}
+            post_options = {f"{p.item.item_name} ({p.item.tracking.current_status}) - {p.user.username}": i for i, p in enumerate(st.session_state.posts)}
             selected_option = st.selectbox("Select Item to Update", list(post_options.keys()))
             
             post_idx = post_options[selected_option]
@@ -131,7 +150,6 @@ else:
             
             if st.button("Apply Status Update"):
                 target_post.item.tracking.update_tracking_status(new_status)
-
                 save_database(st.session_state.posts)
                 st.success(f"Status updated to **{new_status}** and saved!")
                 st.rerun()
