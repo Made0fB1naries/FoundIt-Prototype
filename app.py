@@ -24,7 +24,7 @@ if "posts" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-st.title("📍 FoundIt: Campus Lost & Found Hub")
+st.title(" FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
 st.markdown("---")
 
@@ -56,10 +56,10 @@ else:
 
     # --- 2. VIEW FEED UI WITH SEARCH & NEWEST-FIRST ---
     if navigation == "View Feed":
-        st.header("📋 Recent Dashboard Feed")
+        st.header("Recent Dashboard Feed")
         
         # Search input for Title, Type/Category, and Description
-        search_query = st.text_input("🔍 Search feed (by title, category, or description):", "").strip().lower()
+        search_query = st.text_input("Search feed (by title, category, or description):", "").strip().lower()
         
         if not st.session_state.posts:
             st.info("No items posted yet. Be the first to report one!")
@@ -84,7 +84,7 @@ else:
             else:
                 for post in posts_to_display:
                     with st.container():
-                        st.subheader(f"📌 {post.item.item_name}")
+                        st.subheader(f"{post.item.item_name}")
                         st.write(f"**Status:** `{post.item.tracking.current_status}`")
                         st.write(f"**Category:** {post.item.category.category_name}")
                         st.write(f"**Description:** {post.item.description}")
@@ -93,7 +93,7 @@ else:
 
     # --- 3. REPORT ITEM UI ---
     elif navigation == "Report Item":
-        st.header("📝 Report a Lost Item")
+        st.header("Report a Lost Item")
         with st.form("report_form"):
             item_name = st.text_input("Item Name")
             description = st.text_area("Description / Distinguishing Features")
@@ -120,7 +120,7 @@ else:
 
     # --- 4. SEARCH & FILTER UI ---
     elif navigation == "Filter by Category":
-        st.header("🔍 Filter Feed by Category")
+        st.header("Filter Feed by Category")
         cat_names = [cat.category_name for cat in st.session_state.categories]
         filter_choice = st.selectbox("Select Category to View", cat_names)
         
