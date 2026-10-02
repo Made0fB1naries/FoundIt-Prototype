@@ -102,11 +102,31 @@ def update_status_in_supabase(post_id, new_status):
 
 def purge_expired_claims():
     threshold = (datetime.now() - timedelta(days=7)).isoformat()
-    supabase.table("posts") \
-        .delete() \
+    
+    # 1. Fetch expired claimed posts first so we can check for images
+    expired_posts = supabase.table("posts") \
+        .select("post_id, image_url") \
         .eq("status", "Claimed") \
         .lt("date_claimed", threshold) \
         .execute()
+    
+    if expired_posts.data:
+        for post in expired_posts.data:
+            # 2. Use your new function to wipe both storage and database row cleanly
+            delete_post_and_image(post["post_id"], post.get("image_url"))
+
+def delete_post_and_image(post_id, image_url):
+    # 1. Delete the image from Storage if it exists
+    if image_url:
+        try:
+            # Extract the file path from the public URL
+            file_path = image_url.split("/")[-1]
+            supabase.storage.from_("item-images").remove([file_path])
+        except Exception as e:
+            print(f"Error deleting image from storage: {e}")
+            
+    # 2. Delete the post from the database
+    supabase.table("posts").delete().eq("post_id", post_id).execute()
 
 # --- OOP Classes ---
 class Institution:
