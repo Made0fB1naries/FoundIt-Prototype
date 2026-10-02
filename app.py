@@ -1,15 +1,12 @@
 # app.py
 import streamlit as st
 import datetime
-from models import Institution, User, Category, Tracking, Item, Post, load_database, save_database
+from models import Institution, User, Category, Tracking, Item, Post, load_database, save_to_supabase, update_status_in_supabase
 
-# Page Config
-st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="", layout="centered")
 
-# Initialize School Context
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
 
-# Initialize Categories
 if "categories" not in st.session_state:
     st.session_state.categories = [
         Category("Electronics", "CAT-01"),
@@ -24,11 +21,11 @@ if "posts" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-st.title(" FoundIt: Campus Lost & Found Hub")
+st.title("FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
 st.markdown("---")
 
-# --- 1. USER AUTHENTICATION / LOGIN UI ---
+# --- AUTHENTICATION ---
 if not st.session_state.current_user:
     st.subheader("Institutional Login")
     with st.form("login_form"):
@@ -48,58 +45,54 @@ else:
     st.sidebar.write(f"**{st.session_state.current_user.username}**")
     st.sidebar.caption(f"ID: {st.session_state.current_user.institutional_id}")
     if st.sidebar.button("Logout"):
-        st.session_state.current_user = st.session_state.current_user.logout()
+        st.session_state.current_user = None
         st.rerun()
 
     st.sidebar.markdown("---")
-    navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Category", "Update Tracking Status"])
+    navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Campus", "Update Tracking Status"])
 
-    # --- 2. VIEW FEED UI WITH SEARCH & NEWEST-FIRST ---
+    # --- 1. VIEW FEED ---
     if navigation == "View Feed":
         st.header("Recent Dashboard Feed")
+        search_query = st.text_input("Search feed (title, category, description):", "").strip().lower()
         
-        # Search input for Title, Type/Category, and Description
-        search_query = st.text_input("Search feed (by title, category, or description):", "").strip().lower()
+        posts_to_display = st.session_state.posts[::-1]
         
-        if not st.session_state.posts:
-            st.info("No items posted yet. Be the first to report one!")
+        if search_query:
+            posts_to_display = [
+                p for p in posts_to_display 
+                if search_query in p.item.item_name.lower() or 
+                   search_query in p.item.category.category_name.lower() or 
+                   search_query in p.item.description.lower()
+            ]
+
+        if not posts_to_display:
+            st.info("No items match your search.")
         else:
-            # Reverse list [::-1] so newest items show up on top without numbers
-            posts_to_display = st.session_state.posts[::-1]
-            
-            # Apply search filter if query is entered
-            if search_query:
-                filtered_posts = []
-                for post in posts_to_display:
-                    title_match = search_query in post.item.item_name.lower()
-                    category_match = search_query in post.item.category.category_name.lower()
-                    desc_match = search_query in post.item.description.lower()
-                    
-                    if title_match or category_match or desc_match:
-                        filtered_posts.append(post)
-                posts_to_display = filtered_posts
+            for post in posts_to_display:
+                with st.container():
+                    st.subheader(f"{post.item.item_name}")
+                    if post.item.image_url:
+                        st.image(post.item.image_url, width=300)
+                    st.write(f"**Status:** `{post.item.tracking.current_status}`")
+                    st.write(f"**Campus Location:** `{post.item.campus_location}`")
+                    st.write(f"**Category:** {post.item.category.category_name}")
+                    st.write(f"**Description:** {post.item.description}")
+                    st.caption(f"Posted by {post.user.username} on {post.date_posted}")
+                    st.markdown("---")
 
-            if not posts_to_display:
-                st.warning(f"No items match your search for '{search_query}'.")
-            else:
-                for post in posts_to_display:
-                    with st.container():
-                        st.subheader(f"{post.item.item_name}")
-                        st.write(f"**Status:** `{post.item.tracking.current_status}`")
-                        st.write(f"**Category:** {post.item.category.category_name}")
-                        st.write(f"**Description:** {post.item.description}")
-                        st.caption(f"Posted by {post.user.username} on {post.date_posted}")
-                        st.markdown("---")
-
-    # --- 3. REPORT ITEM UI ---
+    # --- 2. REPORT ITEM WITH IMAGE & CAMPUS ---
     elif navigation == "Report Item":
         st.header("Report a Lost Item")
         with st.form("report_form"):
             item_name = st.text_input("Item Name")
             description = st.text_area("Description / Distinguishing Features")
+            campus_location = st.selectbox("Campus Holding Office", ["RSY Building", "RG Birrey"])
             
             cat_names = [cat.category_name for cat in st.session_state.categories]
             selected_cat_name = st.selectbox("Category", cat_names)
+            
+            uploaded_image = st.file_uploader("Upload Item Photo", type=["jpg", "jpeg", "png"])
             
             submit_post = st.form_submit_button("Post Item")
             
@@ -107,49 +100,51 @@ else:
                 if item_name.strip():
                     selected_cat = next(cat for cat in st.session_state.categories if cat.category_name == selected_cat_name)
                     
-                    new_item = Item(item_name, description, selected_cat)
+                    new_item = Item(item_name, description, selected_cat, campus_location=campus_location)
                     today_date = datetime.date.today().strftime("%Y-%m-%d")
-                    new_post = Post(f"POST-{len(st.session_state.posts)+1}", today_date, st.session_state.current_user, new_item)
+                    new_post = Post(f"POST-{int(datetime.datetime.now().timestamp())}", today_date, st.session_state.current_user, new_item)
                     
-                    st.session_state.posts.append(new_post)
-                    save_database(st.session_state.posts)
+                    save_to_supabase(new_post, image_file=uploaded_image)
                     
-                    st.success("Item posted successfully and saved to the global feed!")
+                    st.session_state.posts = load_database(st.session_state.categories)
+                    st.success("Item posted successfully with photo and saved to Supabase!")
                 else:
                     st.warning("Please provide an item name.")
 
-    # --- 4. SEARCH & FILTER UI ---
-    elif navigation == "Filter by Category":
-        st.header("Filter Feed by Category")
-        cat_names = [cat.category_name for cat in st.session_state.categories]
-        filter_choice = st.selectbox("Select Category to View", cat_names)
+    # --- 3. FILTER BY CAMPUS ---
+    elif navigation == "Filter by Campus":
+        st.header("Filter Feed by Campus Location")
+        campus_choice = st.selectbox("Select Campus Building", ["RSY Building", "RG Birrey"])
         
-        target_cat = next(cat for cat in st.session_state.categories if cat.category_name == filter_choice)
-        all_items = [p.item for p in st.session_state.posts]
-        filtered_items = target_cat.filter_by_category(all_items)
+        filtered_posts = [p for p in st.session_state.posts if p.item.campus_location == campus_choice]
         
-        if not filtered_items:
-            st.info(f"No items found under category: {filter_choice}")
+        if not filtered_posts:
+            st.info(f"No items found at {campus_choice}.")
         else:
-            for item in filtered_items:
-                st.markdown(f"- **{item.item_name}** (`{item.tracking.current_status}`) - {item.description}")
+            for post in filtered_posts[::-1]:
+                st.markdown(f"### {post.item.item_name}")
+                if post.item.image_url:
+                    st.image(post.item.image_url, width=250)
+                st.write(f"**Status:** `{post.item.tracking.current_status}` | **Category:** {post.item.category.category_name}")
+                st.write(f"**Description:** {post.item.description}")
+                st.markdown("---")
 
-    # --- 5. UPDATE TRACKING STATUS UI ---
+    # --- 4. UPDATE TRACKING STATUS ---
     elif navigation == "Update Tracking Status":
         st.header("Update Item Status")
         if not st.session_state.posts:
             st.info("No items available to update.")
         else:
-            post_options = {f"{p.item.item_name} ({p.item.tracking.current_status}) - {p.user.username}": i for i, p in enumerate(st.session_state.posts)}
+            post_options = {f"{p.item.item_name} ({p.item.tracking.current_status}) - {p.user.username}": p for p in st.session_state.posts}
             selected_option = st.selectbox("Select Item to Update", list(post_options.keys()))
             
-            post_idx = post_options[selected_option]
-            target_post = st.session_state.posts[post_idx]
-            
+            target_post = post_options[selected_option]
             new_status = st.radio("Select New Status", ["Lost", "Pending Claim", "Claimed"])
             
             if st.button("Apply Status Update"):
                 target_post.item.tracking.update_tracking_status(new_status)
-                save_database(st.session_state.posts)
-                st.success(f"Status updated to **{new_status}** and saved!")
+                update_status_in_supabase(target_post.post_id, new_status)
+                
+                st.session_state.posts = load_database(st.session_state.categories)
+                st.success(f"Status updated to **{new_status}** in Supabase!")
                 st.rerun()
