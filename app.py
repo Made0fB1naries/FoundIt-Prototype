@@ -1,9 +1,9 @@
 # app.py
 import streamlit as st
 import datetime
-from models import Institution, User, Category, Tracking, Item, Post, load_database, save_to_supabase, update_status_in_supabase
+from models import Institution, User, Category, Tracking, Item, Post, load_database, save_to_supabase, update_status_in_supabase, authenticate_user
 
-st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="", layout="centered")
+st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="🔍", layout="centered")
 
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
 
@@ -21,35 +21,44 @@ if "posts" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-st.title("FoundIt: Campus Lost & Found Hub")
+st.title("🔍 FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
 st.markdown("---")
 
 # --- AUTHENTICATION ---
 if not st.session_state.current_user:
-    st.subheader("Institutional Login")
+    st.subheader("Secure Cloud Login (Supabase Auth)")
     with st.form("login_form"):
-        username = st.text_input("Username")
-        institutional_id = st.text_input("Institutional ID")
+        email = st.text_input("Institutional Email")
+        password = st.text_input("Password", type="password")
         submit_login = st.form_submit_button("Login")
         
         if submit_login:
-            temp_user = User(username, institutional_id)
-            if temp_user.login():
-                st.session_state.current_user = temp_user
-                st.success(f"Welcome, {temp_user.username}!")
+            auth_result = authenticate_user(email, password)
+            if auth_result["success"]:
+                # Create a user session object
+                logged_user = User(username=email.split("@")[0], institutional_id=email, is_admin=auth_result["is_admin"])
+                st.session_state.current_user = logged_user
+                st.success(f"Logged in successfully as {email}!")
                 st.rerun()
             else:
-                st.error("Please enter a valid username.")
+                st.error(f"Authentication failed: {auth_result['error']}")
 else:
     st.sidebar.write(f"**{st.session_state.current_user.username}**")
-    st.sidebar.caption(f"ID: {st.session_state.current_user.institutional_id}")
+    st.sidebar.caption(f"Role: {'Administrator' if st.session_state.current_user.is_admin else 'Student/Faculty'}")
+    
     if st.sidebar.button("Logout"):
         st.session_state.current_user = None
         st.rerun()
 
     st.sidebar.markdown("---")
-    navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Campus", "Update Tracking Status"])
+    
+    # Role-based navigation setup
+    if st.session_state.current_user.is_admin:
+        navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Campus", "Update Tracking Status"])
+    else:
+        navigation = st.sidebar.radio("Navigation", ["View Feed", "Filter by Campus"])
+        st.sidebar.info("💡 You are logged in as a standard user. Only authorized administrators can report or update items.")
 
     # --- 1. VIEW FEED ---
     if navigation == "View Feed":
@@ -62,7 +71,7 @@ else:
             posts_to_display = [
                 p for p in posts_to_display 
                 if search_query in p.item.item_name.lower() or 
-                   search_query in p.item.category.category_name.lower() or 
+                   search_query in search_query in p.item.category.category_name.lower() or 
                    search_query in p.item.description.lower()
             ]
 
@@ -81,7 +90,7 @@ else:
                     st.caption(f"Posted by {post.user.username} on {post.date_posted}")
                     st.markdown("---")
 
-    # --- 2. REPORT ITEM WITH IMAGE & CAMPUS ---
+    # --- 2. REPORT ITEM (Admin Only) ---
     elif navigation == "Report Item":
         st.header("Report a Lost Item")
         with st.form("report_form"):
@@ -99,15 +108,13 @@ else:
             if submit_post:
                 if item_name.strip():
                     selected_cat = next(cat for cat in st.session_state.categories if cat.category_name == selected_cat_name)
-                    
                     new_item = Item(item_name, description, selected_cat, campus_location=campus_location)
                     today_date = datetime.date.today().strftime("%Y-%m-%d")
                     new_post = Post(f"POST-{int(datetime.datetime.now().timestamp())}", today_date, st.session_state.current_user, new_item)
                     
                     save_to_supabase(new_post, image_file=uploaded_image)
-                    
                     st.session_state.posts = load_database(st.session_state.categories)
-                    st.success("Item posted successfully with photo and saved to Supabase!")
+                    st.success("Item posted successfully and saved to Supabase!")
                 else:
                     st.warning("Please provide an item name.")
 
@@ -129,7 +136,7 @@ else:
                 st.write(f"**Description:** {post.item.description}")
                 st.markdown("---")
 
-    # --- 4. UPDATE TRACKING STATUS ---
+    # --- 4. UPDATE TRACKING STATUS (Admin Only) ---
     elif navigation == "Update Tracking Status":
         st.header("Update Item Status")
         if not st.session_state.posts:
@@ -144,7 +151,6 @@ else:
             if st.button("Apply Status Update"):
                 target_post.item.tracking.update_tracking_status(new_status)
                 update_status_in_supabase(target_post.post_id, new_status)
-                
                 st.session_state.posts = load_database(st.session_state.categories)
                 st.success(f"Status updated to **{new_status}** in Supabase!")
                 st.rerun()
