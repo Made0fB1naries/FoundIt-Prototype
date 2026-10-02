@@ -122,21 +122,32 @@ else:
     if st.session_state.current_user.is_admin:
         navigation = st.sidebar.radio(
             "Navigation",
-            ["View Feed", "Claimed Items", "Report Item", "Filter by Campus", "Update Tracking Status"]
+            ["View Feed", "Claimed Items", "Report Item", "Update Tracking Status"]
         )
     else:
-        navigation = st.sidebar.radio("Navigation", ["View Feed", "Claimed Items", "Filter by Campus"])
+        navigation = st.sidebar.radio("Navigation", ["View Feed", "Claimed Items"])
         st.sidebar.info("You are logged in as a standard user. Only authorized administrators can report or update items.")
 
     # --- 1. VIEW FEED (active items only) ---
     if navigation == "View Feed":
         st.header("Recent Dashboard Feed")
-        search_query = st.text_input("Search feed (title, category, description):", "").strip().lower()
+
+        col_search, col_campus = st.columns([2, 1])
+        with col_search:
+            search_query = st.text_input("Search feed (title, category, description):", "").strip().lower()
+        with col_campus:
+            campus_filter = st.selectbox("Campus", ["All Campuses"] + CAMPUS_LOCATIONS, key="feed_campus")
 
         posts_to_display = [
             p for p in st.session_state.posts[::-1]
             if p.item.tracking.current_status != "Claimed"
         ]
+
+        if campus_filter != "All Campuses":
+            posts_to_display = [
+                p for p in posts_to_display
+                if p.item.campus_location == campus_filter
+            ]
 
         if search_query:
             posts_to_display = [
@@ -147,7 +158,7 @@ else:
             ]
 
         if not posts_to_display:
-            st.info("No items match your search.")
+            st.info("No items match your search or filter.")
         else:
             for post in posts_to_display:
                 with st.container():
@@ -216,29 +227,7 @@ else:
                 else:
                     st.warning("Please provide an item name.")
 
-    # --- 4. FILTER BY CAMPUS (active items only) ---
-    elif navigation == "Filter by Campus":
-        st.header("Filter Feed by Campus Location")
-        campus_choice = st.selectbox("Select Campus Building", CAMPUS_LOCATIONS)
-
-        filtered_posts = [
-            p for p in st.session_state.posts
-            if p.item.campus_location == campus_choice
-            and p.item.tracking.current_status != "Claimed"
-        ]
-
-        if not filtered_posts:
-            st.info(f"No active items found at {campus_choice}.")
-        else:
-            for post in filtered_posts[::-1]:
-                st.markdown(f"### {post.item.item_name}")
-                if post.item.image_url:
-                    st.image(post.item.image_url, width=250)
-                st.write(f"**Status:** `{post.item.tracking.current_status}` | **Category:** {post.item.category.category_name}")
-                st.write(f"**Description:** {post.item.description}")
-                st.markdown("---")
-
-    # --- 5. UPDATE TRACKING STATUS (Admin Only) ---
+    # --- 4. UPDATE TRACKING STATUS (Admin Only) ---
     elif navigation == "Update Tracking Status":
         st.header("Update Item Status")
 
