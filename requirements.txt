@@ -1,3 +1,4 @@
 streamlit
 supabase
 streamlit-cookies-controller
+extra-streamlit-components
