@@ -10,10 +10,26 @@ st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="", lay
 
 COOKIE_NAME = "foundit_refresh_token"
 COOKIE_DAYS = 7
+CLAIMED_RETENTION_DAYS = 7
+CAMPUS_LOCATIONS = ["RSY Building", "RG Birrey"]
 
 cookie_manager = stx.CookieManager()
 
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
+
+
+def days_left(date_claimed):
+    """Days remaining before a claimed item is purged, or None if unknown."""
+    try:
+        claimed_at = datetime.datetime.fromisoformat(date_claimed)
+        if claimed_at.tzinfo is None:
+            claimed_at = claimed_at.replace(tzinfo=datetime.timezone.utc)
+        expires_at = claimed_at + datetime.timedelta(days=CLAIMED_RETENTION_DAYS)
+        remaining = expires_at - datetime.datetime.now(datetime.timezone.utc)
+        return max(remaining.days, 0)
+    except (TypeError, ValueError):
+        return None
+
 
 if "categories" not in st.session_state:
     st.session_state.categories = [
@@ -37,6 +53,9 @@ if "pending_token" not in st.session_state:
 
 if "pending_delete" not in st.session_state:
     st.session_state.pending_delete = False
+
+if "status_msg" not in st.session_state:
+    st.session_state.status_msg = None
 
 # --- AUTO-LOGIN FROM COOKIE (survives page refresh) ---
 if not st.session_state.current_user and not st.session_state.logged_out:
@@ -101,24 +120,30 @@ else:
 
     # Role-based navigation setup
     if st.session_state.current_user.is_admin:
-        navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Campus", "Update Tracking Status"])
+        navigation = st.sidebar.radio(
+            "Navigation",
+            ["View Feed", "Claimed Items", "Report Item", "Filter by Campus", "Update Tracking Status"]
+        )
     else:
-        navigation = st.sidebar.radio("Navigation", ["View Feed", "Filter by Campus"])
+        navigation = st.sidebar.radio("Navigation", ["View Feed", "Claimed Items", "Filter by Campus"])
         st.sidebar.info("You are logged in as a standard user. Only authorized administrators can report or update items.")
 
-    # --- 1. VIEW FEED ---
+    # --- 1. VIEW FEED (active items only) ---
     if navigation == "View Feed":
         st.header("Recent Dashboard Feed")
         search_query = st.text_input("Search feed (title, category, description):", "").strip().lower()
 
-        posts_to_display = st.session_state.posts[::-1]
+        posts_to_display = [
+            p for p in st.session_state.posts[::-1]
+            if p.item.tracking.current_status != "Claimed"
+        ]
 
         if search_query:
             posts_to_display = [
                 p for p in posts_to_display
                 if search_query in p.item.item_name.lower() or
                    search_query in p.item.category.category_name.lower() or
-                   search_query in p.item.description.lower()
+                   search_query in (p.item.description or "").lower()
             ]
 
         if not posts_to_display:
@@ -136,13 +161,40 @@ else:
                     st.caption(f"Posted by {post.user.username} on {post.date_posted}")
                     st.markdown("---")
 
-    # --- 2. REPORT ITEM (Admin Only) ---
+    # --- 2. CLAIMED ITEMS (kept for 7 days, then auto-purged) ---
+    elif navigation == "Claimed Items":
+        st.header("Claimed Items")
+        st.caption(f"Claimed items stay here for {CLAIMED_RETENTION_DAYS} days, then are removed automatically.")
+        claimed_campus = st.selectbox("Campus", ["All Campuses"] + CAMPUS_LOCATIONS, key="claimed_campus")
+
+        claimed_posts = [
+            p for p in st.session_state.posts[::-1]
+            if p.item.tracking.current_status == "Claimed"
+        ]
+        if claimed_campus != "All Campuses":
+            claimed_posts = [p for p in claimed_posts if p.item.campus_location == claimed_campus]
+
+        if not claimed_posts:
+            st.info("No claimed items.")
+        else:
+            for post in claimed_posts:
+                st.subheader(post.item.item_name)
+                if post.item.image_url:
+                    st.image(post.item.image_url, width=300)
+                st.write(f"**Campus Location:** `{post.item.campus_location}`")
+                st.write(f"**Category:** {post.item.category.category_name}")
+                remaining = days_left(post.item.tracking.date_claimed)
+                if remaining is not None:
+                    st.caption(f"Removed in {remaining} day(s)")
+                st.markdown("---")
+
+    # --- 3. REPORT ITEM (Admin Only) ---
     elif navigation == "Report Item":
         st.header("Report a Lost Item")
         with st.form("report_form"):
             item_name = st.text_input("Item Name")
             description = st.text_area("Description / Distinguishing Features")
-            campus_location = st.selectbox("Campus Holding Office", ["RSY Building", "RG Birrey"])
+            campus_location = st.selectbox("Campus Holding Office", CAMPUS_LOCATIONS)
 
             cat_names = [cat.category_name for cat in st.session_state.categories]
             selected_cat_name = st.selectbox("Category", cat_names)
@@ -164,15 +216,19 @@ else:
                 else:
                     st.warning("Please provide an item name.")
 
-    # --- 3. FILTER BY CAMPUS ---
+    # --- 4. FILTER BY CAMPUS (active items only) ---
     elif navigation == "Filter by Campus":
         st.header("Filter Feed by Campus Location")
-        campus_choice = st.selectbox("Select Campus Building", ["RSY Building", "RG Birrey"])
+        campus_choice = st.selectbox("Select Campus Building", CAMPUS_LOCATIONS)
 
-        filtered_posts = [p for p in st.session_state.posts if p.item.campus_location == campus_choice]
+        filtered_posts = [
+            p for p in st.session_state.posts
+            if p.item.campus_location == campus_choice
+            and p.item.tracking.current_status != "Claimed"
+        ]
 
         if not filtered_posts:
-            st.info(f"No items found at {campus_choice}.")
+            st.info(f"No active items found at {campus_choice}.")
         else:
             for post in filtered_posts[::-1]:
                 st.markdown(f"### {post.item.item_name}")
@@ -182,17 +238,23 @@ else:
                 st.write(f"**Description:** {post.item.description}")
                 st.markdown("---")
 
-    # --- 4. UPDATE TRACKING STATUS (Admin Only) ---
+    # --- 5. UPDATE TRACKING STATUS (Admin Only) ---
     elif navigation == "Update Tracking Status":
         st.header("Update Item Status")
+
+        # Show the message saved before the rerun, then clear it
+        if st.session_state.status_msg:
+            st.success(st.session_state.status_msg)
+            st.session_state.status_msg = None
+
         if not st.session_state.posts:
             st.info("No items available to update.")
         else:
             post_options = {p.post_id: p for p in st.session_state.posts}
             selected_id = st.selectbox(
-              "Select Item to Update",
-              list(post_options.keys()),
-              format_func=lambda pid: f"{post_options[pid].item.item_name} ({post_options[pid].item.tracking.current_status}) - {post_options[pid].user.username}",
+                "Select Item to Update",
+                list(post_options.keys()),
+                format_func=lambda pid: f"{post_options[pid].item.item_name} ({post_options[pid].item.tracking.current_status}) - {post_options[pid].user.username}",
             )
             target_post = post_options[selected_id]
             new_status = st.radio("Select New Status", ["Lost", "Pending Claim", "Claimed"])
@@ -201,5 +263,5 @@ else:
                 target_post.item.tracking.update_tracking_status(new_status)
                 update_status_in_supabase(target_post.post_id, new_status)
                 st.session_state.posts = load_database(st.session_state.categories)
-                st.success(f"Status updated to **{new_status}** in Supabase!")
+                st.session_state.status_msg = f"Status updated to **{new_status}** in Supabase!"
                 st.rerun()
