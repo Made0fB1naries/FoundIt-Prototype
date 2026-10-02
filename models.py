@@ -13,8 +13,11 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 def _check_admin(email):
-    admin_list = [e.strip() for e in st.secrets.get("ADMIN_EMAILS", "").split(",")]
-    return bool(email and ("admin" in email or email in admin_list))
+    if not email:
+        return False
+    raw = st.secrets.get("ADMIN_EMAILS", "")
+    admin_list = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    return email.strip().lower() in admin_list
 
 def authenticate_user(email, password):
     try:
