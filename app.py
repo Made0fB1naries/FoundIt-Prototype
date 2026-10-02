@@ -187,10 +187,13 @@ else:
         if not st.session_state.posts:
             st.info("No items available to update.")
         else:
-            post_options = {f"{p.item.item_name} ({p.item.tracking.current_status}) - {p.user.username}": p for p in st.session_state.posts}
-            selected_option = st.selectbox("Select Item to Update", list(post_options.keys()))
-
-            target_post = post_options[selected_option]
+            post_options = {p.post_id: p for p in st.session_state.posts}
+            selected_id = st.selectbox(
+              "Select Item to Update",
+              list(post_options.keys()),
+              format_func=lambda pid: f"{post_options[pid].item.item_name} ({post_options[pid].item.tracking.current_status}) - {post_options[pid].user.username}",
+            )
+            target_post = post_options[selected_id]
             new_status = st.radio("Select New Status", ["Lost", "Pending Claim", "Claimed"])
 
             if st.button("Apply Status Update"):
