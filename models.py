@@ -23,7 +23,7 @@ def authenticate_user(email, password):
         is_admin = False
         if user and user.email:
             # Example: check user metadata or hardcode specific admin email domain/address
-            if "admin" in user.email or user.email == "kkmalacas@mapua.edu.ph":
+            if "admin" in user.email or user.email == "kkmalacas@mcm.edu.ph":
                 is_admin = True
                 
         return {
