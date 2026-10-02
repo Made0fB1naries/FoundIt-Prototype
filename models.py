@@ -54,7 +54,6 @@ def save_to_supabase(post, image_file=None):
         "item_name": post.item.item_name,
         "description": post.item.description,
         "category_name": post.item.category.category_name,
-        "category_code": post.item.category.category_code,
         "campus_location": post.item.campus_location,
         "image_url": image_url,
         "status": post.item.tracking.current_status,
