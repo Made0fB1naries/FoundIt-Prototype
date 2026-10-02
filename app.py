@@ -1,5 +1,6 @@
 # app.py
 import streamlit as st
+import uuid
 import datetime
 import extra_streamlit_components as stx
 from models import (Institution, User, Category, Tracking, Item, Post, load_database,
@@ -155,7 +156,7 @@ else:
                     selected_cat = next(cat for cat in st.session_state.categories if cat.category_name == selected_cat_name)
                     new_item = Item(item_name, description, selected_cat, campus_location=campus_location)
                     today_date = datetime.date.today().strftime("%Y-%m-%d")
-                    new_post = Post(f"POST-{int(datetime.datetime.now().timestamp())}", today_date, st.session_state.current_user, new_item)
+                    new_post = Post(f"POST-{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex[:6]}", today_date, st.session_state.current_user, new_item)
 
                     save_to_supabase(new_post, image_file=uploaded_image)
                     st.session_state.posts = load_database(st.session_state.categories)
