@@ -21,16 +21,14 @@ if "posts" not in st.session_state:
 
 # --- PERSISTENT SESSION CHECK VIA COOKIES ---
 if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+
+if st.session_state.current_user is None:
     saved_email = controller.get("logged_user_email")
-    if saved_email:
-        # Pull dynamic admin list from Streamlit secrets instead of hardcoding
+    if saved_email and isinstance(saved_email, str):
         admin_list = [e.strip() for e in st.secrets.get("ADMIN_EMAILS", "").split(",")]
         is_admin = "admin" in saved_email or saved_email in admin_list
-        
-        # Re-instantiate user session automatically from the browser cookie
         st.session_state.current_user = User(username=saved_email.split("@")[0], institutional_id=saved_email, is_admin=is_admin)
-    else:
-        st.session_state.current_user = None
 
 st.title("FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
@@ -47,11 +45,10 @@ if not st.session_state.current_user:
         if submit_login:
             auth_result = authenticate_user(email, password)
             if auth_result["success"]:
-                # Create user session object
                 logged_user = User(username=email.split("@")[0], institutional_id=email, is_admin=auth_result["is_admin"])
                 st.session_state.current_user = logged_user
                 
-                # Save email to browser cookie so refresh preserves the session
+                # Save cookie on successful login
                 controller.set("logged_user_email", email)
                 
                 st.success(f"Logged in successfully as {email}!")
