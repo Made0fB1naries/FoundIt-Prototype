@@ -1,11 +1,12 @@
-# app.py
 import streamlit as st
 import datetime
+from streamlit_cookies_controller import CookieController
 from models import Institution, User, Category, Tracking, Item, Post, load_database, save_to_supabase, update_status_in_supabase, authenticate_user
 
 st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="", layout="centered")
 
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
+controller = CookieController()
 
 if "categories" not in st.session_state:
     st.session_state.categories = [
@@ -18,8 +19,18 @@ if "categories" not in st.session_state:
 if "posts" not in st.session_state:
     st.session_state.posts = load_database(st.session_state.categories)
 
+# --- PERSISTENT SESSION CHECK VIA COOKIES ---
 if "current_user" not in st.session_state:
-    st.session_state.current_user = None
+    saved_email = controller.get("logged_user_email")
+    if saved_email:
+        # Pull dynamic admin list from Streamlit secrets instead of hardcoding
+        admin_list = [e.strip() for e in st.secrets.get("ADMIN_EMAILS", "").split(",")]
+        is_admin = "admin" in saved_email or saved_email in admin_list
+        
+        # Re-instantiate user session automatically from the browser cookie
+        st.session_state.current_user = User(username=saved_email.split("@")[0], institutional_id=saved_email, is_admin=is_admin)
+    else:
+        st.session_state.current_user = None
 
 st.title("FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
@@ -36,9 +47,13 @@ if not st.session_state.current_user:
         if submit_login:
             auth_result = authenticate_user(email, password)
             if auth_result["success"]:
-                # Create a user session object
+                # Create user session object
                 logged_user = User(username=email.split("@")[0], institutional_id=email, is_admin=auth_result["is_admin"])
                 st.session_state.current_user = logged_user
+                
+                # Save email to browser cookie so refresh preserves the session
+                controller.set("logged_user_email", email)
+                
                 st.success(f"Logged in successfully as {email}!")
                 st.rerun()
             else:
@@ -49,6 +64,7 @@ else:
     
     if st.sidebar.button("Logout"):
         st.session_state.current_user = None
+        controller.remove("logged_user_email")  # Clear cookie on explicit logout
         st.rerun()
 
     st.sidebar.markdown("---")
@@ -71,7 +87,7 @@ else:
             posts_to_display = [
                 p for p in posts_to_display 
                 if search_query in p.item.item_name.lower() or 
-                   search_query in search_query in p.item.category.category_name.lower() or 
+                   search_query in p.item.category.category_name.lower() or 
                    search_query in p.item.description.lower()
             ]
 
