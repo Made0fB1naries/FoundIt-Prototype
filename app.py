@@ -27,7 +27,7 @@ st.markdown("---")
 
 # --- AUTHENTICATION ---
 if not st.session_state.current_user:
-    st.subheader("Secure Cloud Login (Supabase Auth)")
+    st.subheader("Login")
     with st.form("login_form"):
         email = st.text_input("Institutional Email")
         password = st.text_input("Password", type="password")
