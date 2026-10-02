@@ -45,7 +45,7 @@ if not st.session_state.current_user:
             else:
                 st.error("Please enter a valid username.")
 else:
-    st.sidebar.write(f"👤 **{st.session_state.current_user.username}**")
+    st.sidebar.write(f"**{st.session_state.current_user.username}**")
     st.sidebar.caption(f"ID: {st.session_state.current_user.institutional_id}")
     if st.sidebar.button("Logout"):
         st.session_state.current_user = st.session_state.current_user.logout()
@@ -136,7 +136,7 @@ else:
 
     # --- 5. UPDATE TRACKING STATUS UI ---
     elif navigation == "Update Tracking Status":
-        st.header("⚙️ Update Item Status")
+        st.header("Update Item Status")
         if not st.session_state.posts:
             st.info("No items available to update.")
         else:
