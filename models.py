@@ -1,8 +1,9 @@
 # models.py
 import os
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
+
 
 
 def _new_auth_client() -> Client:  # throwaway, per login
@@ -110,7 +111,7 @@ def load_database(categories_list):
 
 
 def update_status_in_supabase(post_id, new_status):
-    date_claimed_val = datetime.now().isoformat() if new_status == "Claimed" else None
+    date_claimed_val = datetime.now(timezone.utc).isoformat() if new_status == "Claimed" else None
     supabase_admin.table("posts").update({
         "status": new_status,
         "date_claimed": date_claimed_val
@@ -118,7 +119,7 @@ def update_status_in_supabase(post_id, new_status):
 
 
 def purge_expired_claims():
-    threshold = (datetime.now() - timedelta(days=7)).isoformat()
+    threshold = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     expired_posts = supabase_admin.table("posts") \
         .select("post_id, image_url") \
         .eq("status", "Claimed") \
@@ -170,7 +171,7 @@ class Tracking:
     def update_tracking_status(self, new_status):
         self.current_status = new_status
         if new_status == "Claimed":
-            self.date_claimed = datetime.now().isoformat()
+            self.date_claimed = datetime.now(timezone.utc).isoformat()
 
 
 class Item:
