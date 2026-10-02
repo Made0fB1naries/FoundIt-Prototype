@@ -4,7 +4,6 @@ import streamlit as st
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 
-# Initialize Supabase Client using Streamlit Secrets
 @st.cache_resource
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
@@ -13,26 +12,40 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
+def authenticate_user(email, password):
+    try:
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        user = response.user
+        
+        # Check if the user has an admin role or metadata flag in Supabase, 
+        # or you can check if their email matches an institutional admin email.
+        # For this setup, we look at user metadata or treat specific emails as admin.
+        is_admin = False
+        if user and user.email:
+            # Example: check user metadata or hardcode specific admin email domain/address
+            if "admin" in user.email or user.email == "admin@mapua.edu.ph":
+                is_admin = True
+                
+        return {
+            "success": True,
+            "email": user.email,
+            "is_admin": is_admin
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 def save_to_supabase(post, image_file=None):
     image_url = None
-    
-    # Handle image upload to Supabase Storage bucket
     if image_file is not None:
         file_ext = image_file.name.split(".")[-1]
         file_path = f"{post.post_id}.{file_ext}"
-        
-        # Upload file to 'item-images' bucket
         supabase.storage.from_("item-images").upload(
             path=file_path,
             file=image_file.getvalue(),
             file_options={"content-type": image_file.type, "upsert": "true"}
         )
-        
-        # Get public URL
-        public_url_res = supabase.storage.from_("item-images").get_public_url(file_path)
-        image_url = public_url_res
+        image_url = supabase.storage.from_("item-images").get_public_url(file_path)
 
-    # Insert post data into Supabase table
     data = {
         "post_id": post.post_id,
         "date_posted": post.date_posted,
@@ -50,9 +63,7 @@ def save_to_supabase(post, image_file=None):
     supabase.table("posts").insert(data).execute()
 
 def load_database(categories_list):
-    # Auto-purge claims older than 7 days first
     purge_expired_claims()
-    
     response = supabase.table("posts").select("*").execute()
     data = response.data
     
@@ -72,14 +83,12 @@ def load_database(categories_list):
 
 def update_status_in_supabase(post_id, new_status):
     date_claimed_val = datetime.now().isoformat() if new_status == "Claimed" else None
-    
     supabase.table("posts").update({
         "status": new_status,
         "date_claimed": date_claimed_val
     }).eq("post_id", post_id).execute()
 
 def purge_expired_claims():
-    # Deletes claimed items older than 7 days
     threshold = (datetime.now() - timedelta(days=7)).isoformat()
     supabase.table("posts") \
         .delete() \
@@ -97,23 +106,15 @@ class Institution:
         return f"{self.institution_name} - {self.campus_location}"
 
 class User:
-    def __init__(self, username, institutional_id):
+    def __init__(self, username, institutional_id, is_admin=False):
         self.username = username
         self.institutional_id = institutional_id
-
-    def login(self):
-        return bool(self.username.strip())
-
-    def logout(self):
-        return None
+        self.is_admin = is_admin
 
 class Category:
     def __init__(self, category_name, category_code):
         self.category_name = category_name
         self.category_code = category_code
-
-    def filter_by_category(self, items):
-        return [item for item in items if item.category.category_name == self.category_name]
 
 class Tracking:
     def __init__(self, tracking_id, current_status="Lost"):
