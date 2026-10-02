@@ -3,7 +3,7 @@ import streamlit as st
 import datetime
 from models import Institution, User, Category, Tracking, Item, Post, load_database, save_to_supabase, update_status_in_supabase, authenticate_user
 
-st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="FoundIt - Campus Lost & Found", page_icon="", layout="centered")
 
 school = Institution("Mapúa Malayan Colleges Mindanao", "Davao City")
 
@@ -21,7 +21,7 @@ if "posts" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-st.title("🔍 FoundIt: Campus Lost & Found Hub")
+st.title("FoundIt: Campus Lost & Found Hub")
 st.caption(f"{school.get_details()}")
 st.markdown("---")
 
@@ -32,7 +32,7 @@ if not st.session_state.current_user:
         email = st.text_input("Institutional Email")
         password = st.text_input("Password", type="password")
         submit_login = st.form_submit_button("Login")
-        
+         
         if submit_login:
             auth_result = authenticate_user(email, password)
             if auth_result["success"]:
@@ -58,7 +58,7 @@ else:
         navigation = st.sidebar.radio("Navigation", ["View Feed", "Report Item", "Filter by Campus", "Update Tracking Status"])
     else:
         navigation = st.sidebar.radio("Navigation", ["View Feed", "Filter by Campus"])
-        st.sidebar.info("💡 You are logged in as a standard user. Only authorized administrators can report or update items.")
+        st.sidebar.info("You are logged in as a standard user. Only authorized administrators can report or update items.")
 
     # --- 1. VIEW FEED ---
     if navigation == "View Feed":
