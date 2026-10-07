@@ -212,6 +212,10 @@ class User(ABC):
         return self._institutional_id
 
     @property
+    def avatar_initial(self):
+        return self._username[:1].upper()
+
+    @property
     @abstractmethod
     def role_label(self):
         ...
