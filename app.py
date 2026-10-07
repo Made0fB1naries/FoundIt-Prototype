@@ -82,7 +82,7 @@ class CookieSession:
 
 class Page(ABC):
     title = ""
-    section = ""  # matches the names returned by User.sections()
+    label = ""  # sidebar text
     ALL_CAMPUSES = "All Campuses"
 
     def __init__(self, service, state):
@@ -112,14 +112,14 @@ class AdminPage(Page):
 
 
 class FeedPage(Page):
-    title = "View Feed"
-    section = "Feed"
+    title = "Feed"
+    label = "View Feed"
 
     def render(self, user):
         st.header("Recent Dashboard Feed")
         col_search, col_campus = st.columns([2, 1])
         with col_search:
-            query = st.text_input("Search feed (title, category, description):", "").strip()
+            query = st.text_input("Search feed (title, category, description):", "", key="feed_search")
         with col_campus:
             campus = self._campus_filter("feed_campus")
 
@@ -145,8 +145,8 @@ class FeedPage(Page):
 
 
 class ClaimedPage(Page):
-    title = "Claimed Items"
-    section = "Claimed"
+    title = "Claimed"
+    label = "Claimed Items"
 
     def render(self, user):
         st.header("Claimed Items")
@@ -169,9 +169,9 @@ class ClaimedPage(Page):
             st.markdown("---")
 
 
-class ReportItemPage(AdminPage):
-    title = "Report Item"
-    section = "Report"
+class ReportPage(AdminPage):
+    title = "Report"
+    label = "Report Item"
 
     def _render(self, user):
         rk = self._state.report_n  # new key per post, so the form comes back empty
@@ -200,8 +200,8 @@ class ReportItemPage(AdminPage):
 
 
 class UpdateStatusPage(AdminPage):
-    title = "Update Tracking Status"
-    section = "Update status"
+    title = "Update status"
+    label = "Update Tracking Status"
 
     @staticmethod
     def _label(post):
@@ -234,7 +234,7 @@ class UpdateStatusPage(AdminPage):
 # ---------------------------------------------------------------- application
 
 class FoundItApp:
-    PAGES = (FeedPage, ClaimedPage, ReportItemPage, UpdateStatusPage)
+    PAGES = (FeedPage, ClaimedPage, ReportPage, UpdateStatusPage)
 
     def __init__(self):
         self._gateway = get_gateway()
@@ -287,16 +287,17 @@ class FoundItApp:
 
         st.sidebar.markdown("---")
 
-        allowed = user.sections()
-        pages = [cls(service, self._state) for cls in self.PAGES if cls.section in allowed]
-        choice = st.sidebar.radio("Navigation", [p.title for p in pages], key="nav")
+        pages = {cls.title: cls(service, self._state) for cls in self.PAGES}
+        navigation = st.sidebar.radio(
+            "Navigation", user.sections(), key="nav", format_func=lambda t: pages[t].label
+        )
         if not user.can_manage_items():
             st.sidebar.info(
                 "You are logged in as a standard user. "
                 "Only authorized administrators can report or update items."
             )
 
-        next(p for p in pages if p.title == choice).render(user)
+        pages.get(navigation, pages["Feed"]).render(user)
 
     def run(self):
         self._cookies.restore()
